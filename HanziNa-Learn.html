@@ -1,0 +1,853 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>HanziNa Learn — Click-to-Understand Reading</title>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'ui-sans-serif', 'system-ui'],
+          zh:   ['"Noto Sans SC"', 'Inter', 'sans-serif'],
+        },
+        animation: {
+          'gradient-shift': 'gradientShift 18s ease infinite',
+          'float': 'float 6s ease-in-out infinite',
+        },
+        keyframes: {
+          gradientShift: {
+            '0%,100%': { backgroundPosition: '0% 50%' },
+            '50%':     { backgroundPosition: '100% 50%' },
+          },
+          float: {
+            '0%,100%': { transform: 'translateY(0)' },
+            '50%':     { transform: 'translateY(-8px)' },
+          }
+        }
+      }
+    }
+  }
+</script>
+
+<!-- React + Babel + Framer Motion (ESM) -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<style>
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: linear-gradient(120deg,#eef2ff 0%,#faf5ff 35%,#fdf2f8 70%,#eff6ff 100%);
+    background-size: 300% 300%;
+    animation: gradientShift 18s ease infinite;
+    min-height: 100vh;
+  }
+  .dark body, html.dark body {
+    background: linear-gradient(120deg,#0b1020 0%,#1a103d 40%,#2a0e4a 70%,#0b1020 100%);
+    background-size: 300% 300%;
+    animation: gradientShift 22s ease infinite;
+  }
+  @keyframes gradientShift {
+    0%,100% { background-position: 0% 50%; }
+    50%     { background-position: 100% 50%; }
+  }
+  /* glass card */
+  .glass {
+    background: rgba(255,255,255,0.55);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.55);
+    box-shadow: 0 20px 60px -20px rgba(99,102,241,0.25), 0 8px 24px -12px rgba(168,85,247,0.15);
+  }
+  html.dark .glass {
+    background: rgba(15,18,38,0.55);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 20px 60px -20px rgba(99,102,241,0.35), 0 8px 24px -12px rgba(168,85,247,0.25);
+  }
+  /* pretty scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg,#a5b4fc,#c4b5fd);
+    border-radius: 999px;
+  }
+  html.dark ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg,#4338ca,#7c3aed);
+  }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* token ripple */
+  .token-ripple {
+    position: absolute; inset: 0; border-radius: 12px;
+    overflow: hidden; pointer-events: none;
+  }
+  .ripple-dot {
+    position: absolute; border-radius: 9999px;
+    background: rgba(129,140,248,0.45);
+    transform: translate(-50%,-50%) scale(0);
+    animation: rippleAnim 600ms ease-out forwards;
+  }
+  @keyframes rippleAnim {
+    to { transform: translate(-50%,-50%) scale(8); opacity: 0; }
+  }
+
+  /* focus ring */
+  .focus-ring:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.35);
+  }
+
+  /* gradient text */
+  .grad-text {
+    background: linear-gradient(90deg,#6366f1,#a855f7,#ec4899);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  /* tokens reveal stagger via CSS */
+  .token-enter { opacity: 0; transform: translateY(6px); animation: tokenIn 380ms cubic-bezier(.2,.7,.2,1) forwards; }
+  @keyframes tokenIn { to { opacity: 1; transform: translateY(0); } }
+
+  /* expand panel transition */
+  .panel-expand {
+    overflow: hidden;
+    animation: panelIn 280ms cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  @keyframes panelIn {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); max-height: 0; }
+    to   { opacity: 1; transform: translateY(0)    scale(1);    max-height: 200px; }
+  }
+
+  /* nav logo float */
+  .logo-float { animation: float 6s ease-in-out infinite; }
+
+  textarea { transition: box-shadow .2s ease, border-color .2s ease; }
+  textarea:focus { box-shadow: 0 0 0 4px rgba(129,140,248,0.18); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useMemo, useEffect, useCallback, useRef, memo } = React;
+
+// ─────────────────────────────────────────────────────────
+// Icons (inline lucide-style)
+// ─────────────────────────────────────────────────────────
+const Icon = ({ d, size=18, stroke=2, className="" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"
+       className={className}>{d}</svg>
+);
+const I = {
+  Sun:    (p)=> <Icon {...p} d={<><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></>} />,
+  Moon:   (p)=> <Icon {...p} d={<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>} />,
+  Sparkles:(p)=> <Icon {...p} d={<><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/></>} />,
+  Wand:   (p)=> <Icon {...p} d={<><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M15 9h0M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5"/></>} />,
+  Copy:   (p)=> <Icon {...p} d={<><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>} />,
+  Trash:  (p)=> <Icon {...p} d={<><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></>} />,
+  Expand: (p)=> <Icon {...p} d={<><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></>} />,
+  Collapse:(p)=> <Icon {...p} d={<><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/></>} />,
+  Eye:    (p)=> <Icon {...p} d={<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></>} />,
+  Lang:   (p)=> <Icon {...p} d={<><path d="M5 8h14M9 4v4M7 20l4-9 4 9M8 17h6M16 4l4 8-4 8"/></>} />,
+  Check:  (p)=> <Icon {...p} d={<path d="M20 6L9 17l-5-5"/>} />,
+  Book:   (p)=> <Icon {...p} d={<><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></>} />,
+};
+
+// ─────────────────────────────────────────────────────────
+// Built-in samples
+// ─────────────────────────────────────────────────────────
+const SAMPLE_ZH_TEXT =
+`如果愛 殘存些溫度
+回憶會 燃燒到 幾度
+如果我 還愛你
+你會不會 心疼我`;
+
+const SAMPLE_ZH_VOCAB =
+`如果 - if (rúguǒ)
+愛 - love (ài)
+殘存 - remain; linger (cáncún)
+些 - some; a few (xiē)
+溫度 - temperature (wēndù)
+回憶 - memory (huíyì)
+會 - will; can (huì)
+燃燒 - burn (ránshāo)
+到 - to; until (dào)
+幾度 - how many degrees (jǐdù)
+我 - I; me (wǒ)
+還 - still (hái)
+你 - you (nǐ)
+不會 - will not (búhuì)
+心疼 - feel sorry for; love dearly (xīnténg)`;
+
+const SAMPLE_FR_TEXT =
+`Bonjour, je suis très heureux de te voir aujourd'hui. La vie est belle et le soleil brille.`;
+
+const SAMPLE_FR_VOCAB =
+`bonjour - hello
+je - I
+suis - am
+très - very
+heureux - happy
+de - of
+te - you
+voir - to see
+aujourd'hui - today
+la - the
+vie - life
+est - is
+belle - beautiful
+et - and
+le - the
+soleil - sun
+brille - shines`;
+
+// ─────────────────────────────────────────────────────────
+// Vocab parser:  "word - meaning (pinyin)"  | "word - meaning"
+// ─────────────────────────────────────────────────────────
+function parseVocab(raw) {
+  const dict = {};
+  if (!raw) return dict;
+  const lines = raw.split(/\r?\n/);
+  for (const line of lines) {
+    const s = line.trim();
+    if (!s) continue;
+    // split first " - " (or " – " or " — ")
+    const m = s.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+    if (!m) continue;
+    const word = m[1].trim();
+    let rest = m[2].trim();
+    let pinyin = '';
+    const pm = rest.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+    if (pm) {
+      rest   = pm[1].trim();
+      pinyin = pm[2].trim();
+    }
+    if (!word) continue;
+    dict[word] = { meaning: rest, pinyin };
+    // also store a lowercased key for European languages (case-insensitive lookup)
+    dict[word.toLowerCase()] = { meaning: rest, pinyin };
+  }
+  return dict;
+}
+
+// ─────────────────────────────────────────────────────────
+// Language detection + tokenizer
+// ─────────────────────────────────────────────────────────
+const HAN_RE = /[\u3400-\u9FFF\uF900-\uFAFF]/;
+function detectLanguage(text) {
+  if (!text) return 'auto';
+  let han = 0, total = 0;
+  for (const ch of text) {
+    if (/\s/.test(ch)) continue;
+    total++;
+    if (HAN_RE.test(ch)) han++;
+  }
+  if (total === 0) return 'auto';
+  return han / total > 0.25 ? 'chinese' : 'european';
+}
+
+function tokenizeChinese(text, dict, maxLen=6) {
+  const tokens = [];
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    // newline
+    if (ch === '\n') { tokens.push({ kind:'newline' }); i++; continue; }
+    // whitespace
+    if (/\s/.test(ch)) { tokens.push({ kind:'space', text: ch }); i++; continue; }
+    // han character — try longest match
+    if (HAN_RE.test(ch)) {
+      let matched = null;
+      const remaining = text.length - i;
+      const tryLen = Math.min(maxLen, remaining);
+      for (let L = tryLen; L >= 1; L--) {
+        const sub = text.substr(i, L);
+        if (dict[sub]) { matched = { word: sub, entry: dict[sub] }; break; }
+      }
+      if (matched) {
+        tokens.push({ kind:'word', text: matched.word, entry: matched.entry, lang:'zh' });
+        i += matched.word.length;
+      } else {
+        // single han char as unknown clickable
+        tokens.push({ kind:'word', text: ch, entry: null, lang:'zh' });
+        i++;
+      }
+      continue;
+    }
+    // punctuation / other -> non-clickable
+    // group consecutive punctuation chars
+    let j = i;
+    while (j < text.length && !HAN_RE.test(text[j]) && text[j] !== '\n' && !/\s/.test(text[j])) {
+      j++;
+    }
+    tokens.push({ kind:'punct', text: text.slice(i, j) });
+    i = j;
+  }
+  return tokens;
+}
+
+function tokenizeEuropean(text, dict) {
+  const tokens = [];
+  // Split keeping delimiters: letters (including accents/apostrophes) vs everything else
+  // We use a regex with sticky/global to walk through
+  const re = /([A-Za-zÀ-ÖØ-öø-ÿ'’\-]+)|(\n)|(\s+)|([^A-Za-zÀ-ÖØ-öø-ÿ'’\-\s\n]+)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m[1]) {
+      const w = m[1];
+      const key = w.toLowerCase();
+      const entry = dict[w] || dict[key] || null;
+      tokens.push({ kind:'word', text: w, entry, lang:'eu' });
+    } else if (m[2]) {
+      tokens.push({ kind:'newline' });
+    } else if (m[3]) {
+      tokens.push({ kind:'space', text: m[3] });
+    } else if (m[4]) {
+      tokens.push({ kind:'punct', text: m[4] });
+    }
+  }
+  return tokens;
+}
+
+function tokenize(text, dict, languageMode) {
+  if (!text) return [];
+  let mode = languageMode;
+  if (mode === 'auto') mode = detectLanguage(text);
+  if (mode === 'chinese') return tokenizeChinese(text, dict);
+  return tokenizeEuropean(text, dict);
+}
+
+// ─────────────────────────────────────────────────────────
+// Token component (memoized)
+// ─────────────────────────────────────────────────────────
+const Token = memo(function Token({ token, index, expanded, onToggle, showUnknown, animDelay }) {
+  const ref = useRef(null);
+  const [ripples, setRipples] = useState([]);
+
+  const handleClick = (e) => {
+    // ripple
+    const rect = ref.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const id = Date.now() + Math.random();
+    setRipples(r => [...r, { id, x, y, size: Math.max(rect.width, rect.height) }]);
+    setTimeout(()=> setRipples(r => r.filter(rr => rr.id !== id)), 650);
+    onToggle(index);
+  };
+
+  const isZh = token.lang === 'zh';
+  const known = !!token.entry;
+  const meaning = token.entry?.meaning;
+  const pinyin  = token.entry?.pinyin;
+
+  return (
+    <span
+      className="inline-block align-baseline mx-[2px] my-[3px] token-enter"
+      style={{ animationDelay: `${Math.min(animDelay, 600)}ms` }}
+    >
+      <span className="inline-flex flex-col items-center">
+        <button
+          ref={ref}
+          onClick={handleClick}
+          className={[
+            "relative select-none cursor-pointer rounded-lg px-2 py-1",
+            "transition-all duration-200 focus-ring",
+            isZh ? "font-zh text-2xl leading-snug" : "text-lg",
+            "hover:-translate-y-0.5",
+            known
+              ? (expanded
+                  ? "bg-gradient-to-br from-indigo-500/15 to-purple-500/15 ring-2 ring-indigo-400/60 shadow-md shadow-indigo-500/20 text-indigo-900 dark:text-indigo-100"
+                  : "bg-white/60 dark:bg-white/5 hover:bg-white/90 dark:hover:bg-white/10 ring-1 ring-slate-200/70 dark:ring-white/10 text-slate-800 dark:text-slate-100 hover:ring-indigo-400/50")
+              : (showUnknown
+                  ? "bg-amber-100/70 dark:bg-amber-400/15 text-amber-900 dark:text-amber-200 ring-1 ring-amber-300/60 dark:ring-amber-400/30 [text-decoration:underline_dashed] underline-offset-4 decoration-amber-400/70"
+                  : "text-slate-500 dark:text-slate-300 [text-decoration:underline_dashed] underline-offset-4 decoration-slate-300 dark:decoration-slate-600 hover:bg-white/40 dark:hover:bg-white/5"),
+          ].join(' ')}
+          aria-pressed={expanded}
+          aria-label={`${token.text}${known ? `: ${meaning}` : ''}`}
+        >
+          {token.text}
+          <span className="token-ripple">
+            {ripples.map(r => (
+              <span key={r.id} className="ripple-dot"
+                    style={{ left: r.x, top: r.y, width: r.size, height: r.size }} />
+            ))}
+          </span>
+        </button>
+
+        {expanded && (
+          <span
+            className="panel-expand mt-1 inline-block rounded-xl px-3 py-2 text-center
+                       bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10
+                       border border-indigo-300/40 dark:border-indigo-300/20
+                       shadow-md shadow-purple-500/10
+                       min-w-[64px] max-w-[260px]"
+          >
+            {known ? (
+              <span className="flex flex-col items-center gap-0.5">
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-tight">
+                  {meaning}
+                </span>
+                {pinyin && (
+                  <span className="text-xs italic text-indigo-600 dark:text-indigo-300 tracking-wide">
+                    {pinyin}
+                  </span>
+                )}
+              </span>
+            ) : (
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                No translation
+              </span>
+            )}
+          </span>
+        )}
+      </span>
+    </span>
+  );
+});
+
+// ─────────────────────────────────────────────────────────
+// Main App
+// ─────────────────────────────────────────────────────────
+function App() {
+  // Theme
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('hn-dark');
+    if (saved !== null) return saved === '1';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  useEffect(()=>{
+    document.documentElement.classList.toggle('dark', dark);
+    localStorage.setItem('hn-dark', dark ? '1' : '0');
+  }, [dark]);
+
+  const [text, setText]   = useState(SAMPLE_ZH_TEXT);
+  const [vocab, setVocab] = useState(SAMPLE_ZH_VOCAB);
+  const [language, setLanguage] = useState('auto');
+  const [highlightUnknown, setHighlightUnknown] = useState(true);
+  const [expanded, setExpanded] = useState(new Set());
+  const [copied, setCopied]     = useState(false);
+  const [renderKey, setRenderKey] = useState(0); // bump to re-trigger stagger
+
+  // Generated state — only commits on Generate click
+  const [gen, setGen] = useState(() => ({
+    text: SAMPLE_ZH_TEXT,
+    vocab: SAMPLE_ZH_VOCAB,
+    language: 'auto',
+  }));
+
+  const dict = useMemo(()=> parseVocab(gen.vocab), [gen.vocab]);
+  const tokens = useMemo(()=> tokenize(gen.text, dict, gen.language), [gen.text, dict, gen.language]);
+
+  // stats
+  const stats = useMemo(()=>{
+    let total = 0, known = 0, unknown = 0;
+    for (const t of tokens) {
+      if (t.kind === 'word') {
+        total++;
+        if (t.entry) known++; else unknown++;
+      }
+    }
+    return { total, known, unknown };
+  }, [tokens]);
+
+  const wordIndices = useMemo(
+    ()=> tokens.map((t,i)=> t.kind==='word' ? i : -1).filter(i=> i>=0),
+    [tokens]
+  );
+
+  const toggle = useCallback((i) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+  }, []);
+
+  const handleGenerate = () => {
+    setExpanded(new Set());
+    setGen({ text, vocab, language });
+    setRenderKey(k => k+1);
+  };
+
+  const loadChinese = () => {
+    setText(SAMPLE_ZH_TEXT); setVocab(SAMPLE_ZH_VOCAB); setLanguage('chinese');
+    setExpanded(new Set());
+    setGen({ text: SAMPLE_ZH_TEXT, vocab: SAMPLE_ZH_VOCAB, language: 'chinese' });
+    setRenderKey(k=>k+1);
+  };
+  const loadFrench = () => {
+    setText(SAMPLE_FR_TEXT); setVocab(SAMPLE_FR_VOCAB); setLanguage('european');
+    setExpanded(new Set());
+    setGen({ text: SAMPLE_FR_TEXT, vocab: SAMPLE_FR_VOCAB, language: 'european' });
+    setRenderKey(k=>k+1);
+  };
+  const clearAll = () => {
+    setText(''); setVocab(''); setExpanded(new Set());
+    setGen({ text:'', vocab:'', language });
+    setRenderKey(k=>k+1);
+  };
+
+  const expandAll   = () => setExpanded(new Set(wordIndices));
+  const collapseAll = () => setExpanded(new Set());
+
+  const copyOutput = async () => {
+    // Build a plain-text "annotated" version
+    const lines = [];
+    let line = '';
+    for (const t of tokens) {
+      if (t.kind === 'newline') { lines.push(line); line=''; continue; }
+      if (t.kind === 'space' || t.kind === 'punct') { line += t.text; continue; }
+      if (t.kind === 'word') {
+        if (t.entry) {
+          const py = t.entry.pinyin ? ` /${t.entry.pinyin}/` : '';
+          line += `${t.text}[${t.entry.meaning}${py}]`;
+        } else {
+          line += t.text;
+        }
+      }
+    }
+    lines.push(line);
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopied(true);
+      setTimeout(()=> setCopied(false), 1500);
+    } catch(e) {}
+  };
+
+  // ── Layout ──
+  return (
+    <div className="min-h-screen text-slate-800 dark:text-slate-100">
+      {/* NAV */}
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/40 dark:bg-slate-900/40 border-b border-white/40 dark:border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+          <div className="logo-float h-10 w-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 grid place-items-center text-white font-zh font-black shadow-lg shadow-purple-500/30">
+            漢
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-lg sm:text-xl font-extrabold tracking-tight">
+                <span className="grad-text">HanziNa</span> Learn
+              </h1>
+              <span className="hidden sm:inline text-xs text-slate-500 dark:text-slate-400">
+                · click-to-understand reading
+              </span>
+            </div>
+          </div>
+
+          <a href="#" onClick={(e)=>{e.preventDefault(); loadChinese();}}
+             className="hidden md:inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 hover:bg-white/90 dark:hover:bg-white/10 transition">
+            <I.Sparkles size={14}/> Try Chinese
+          </a>
+          <a href="#" onClick={(e)=>{e.preventDefault(); loadFrench();}}
+             className="hidden md:inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 hover:bg-white/90 dark:hover:bg-white/10 transition">
+            <I.Sparkles size={14}/> Try French
+          </a>
+
+          <button
+            onClick={()=> setDark(d=>!d)}
+            className="h-9 w-9 grid place-items-center rounded-xl bg-white/60 dark:bg-white/5 border border-white/60 dark:border-white/10 hover:bg-white/90 dark:hover:bg-white/10 transition focus-ring"
+            aria-label="Toggle dark mode"
+          >
+            {dark ? <I.Sun/> : <I.Moon/>}
+          </button>
+        </div>
+      </header>
+
+      {/* MAIN */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        {/* LEFT — Input */}
+        <section className="lg:col-span-5 space-y-5">
+
+          <div className="glass rounded-2xl p-5 sm:p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-8 w-8 grid place-items-center rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-300">
+                <I.Book size={16}/>
+              </div>
+              <h2 className="font-semibold">Your text</h2>
+              <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+                lyrics · stories · articles
+              </span>
+            </div>
+            <textarea
+              value={text}
+              onChange={e=> setText(e.target.value)}
+              rows={7}
+              placeholder="Paste any text in Chinese, French, Spanish, English…"
+              className="w-full resize-y rounded-xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-slate-900/40 p-3.5 text-[15px] leading-relaxed focus:outline-none focus-ring placeholder:text-slate-400 dark:placeholder:text-slate-500 font-zh"
+            />
+          </div>
+
+          <div className="glass rounded-2xl p-5 sm:p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-8 w-8 grid place-items-center rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-300">
+                <I.Lang size={16}/>
+              </div>
+              <h2 className="font-semibold">Vocabulary</h2>
+              <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+                <code className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/10">word - meaning (pinyin)</code>
+              </span>
+            </div>
+            <textarea
+              value={vocab}
+              onChange={e=> setVocab(e.target.value)}
+              rows={8}
+              placeholder={"如果 - if (rúguǒ)\n愛 - love (ài)"}
+              className="w-full resize-y rounded-xl border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-slate-900/40 p-3.5 text-[14px] leading-relaxed font-mono focus:outline-none focus-ring placeholder:text-slate-400 dark:placeholder:text-slate-500"
+            />
+          </div>
+
+          <div className="glass rounded-2xl p-5 sm:p-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-sm font-medium">Language</label>
+              <select
+                value={language}
+                onChange={e=> setLanguage(e.target.value)}
+                className="rounded-lg bg-white/70 dark:bg-slate-900/40 border border-slate-200/70 dark:border-white/10 px-3 py-2 text-sm focus:outline-none focus-ring"
+              >
+                <option value="auto">Auto-detect</option>
+                <option value="chinese">Chinese 中文</option>
+                <option value="european">European (FR/ES/EN/…)</option>
+              </select>
+
+              <label className="ml-auto inline-flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={highlightUnknown}
+                  onChange={e=> setHighlightUnknown(e.target.checked)}
+                  className="h-4 w-4 accent-indigo-500"
+                />
+                Highlight unknown
+              </label>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                onClick={handleGenerate}
+                className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold
+                           bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500
+                           shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50
+                           hover:-translate-y-0.5 active:translate-y-0 transition focus-ring"
+              >
+                <I.Wand size={16}/>
+                Generate Learning Mode
+              </button>
+
+              <button
+                onClick={loadChinese}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium
+                           bg-white/70 dark:bg-white/5 border border-white/70 dark:border-white/10
+                           hover:bg-white dark:hover:bg-white/10 transition focus-ring"
+              >
+                <I.Sparkles size={14}/> Chinese sample
+              </button>
+              <button
+                onClick={loadFrench}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium
+                           bg-white/70 dark:bg-white/5 border border-white/70 dark:border-white/10
+                           hover:bg-white dark:hover:bg-white/10 transition focus-ring"
+              >
+                <I.Sparkles size={14}/> French sample
+              </button>
+              <button
+                onClick={clearAll}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium
+                           bg-white/50 dark:bg-white/5 border border-white/70 dark:border-white/10
+                           hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-600 dark:text-rose-300 transition focus-ring"
+              >
+                <I.Trash size={14}/> Clear
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* RIGHT — Reading */}
+        <section className="lg:col-span-7">
+          <div className="glass rounded-2xl p-5 sm:p-7 min-h-[420px] flex flex-col">
+
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div className="h-8 w-8 grid place-items-center rounded-lg bg-pink-500/15 text-pink-600 dark:text-pink-300">
+                <I.Eye size={16}/>
+              </div>
+              <h2 className="font-semibold">Interactive reading</h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">
+                — tap any word
+              </span>
+
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <button
+                  onClick={expandAll}
+                  disabled={!tokens.length}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/70 dark:bg-white/5 border border-white/70 dark:border-white/10 hover:bg-white dark:hover:bg-white/10 transition disabled:opacity-40"
+                >
+                  <I.Expand size={13}/> Expand all
+                </button>
+                <button
+                  onClick={collapseAll}
+                  disabled={!expanded.size}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/70 dark:bg-white/5 border border-white/70 dark:border-white/10 hover:bg-white dark:hover:bg-white/10 transition disabled:opacity-40"
+                >
+                  <I.Collapse size={13}/> Collapse
+                </button>
+                <button
+                  onClick={copyOutput}
+                  disabled={!tokens.length}
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/70 dark:bg-white/5 border border-white/70 dark:border-white/10 hover:bg-white dark:hover:bg-white/10 transition disabled:opacity-40"
+                >
+                  {copied ? <><I.Check size={13}/> Copied</> : <><I.Copy size={13}/> Copy</>}
+                </button>
+              </div>
+            </div>
+
+            {/* Reading area */}
+            <div className="flex-1">
+              {tokens.length === 0 ? (
+                <EmptyState onChinese={loadChinese} onFrench={loadFrench} />
+              ) : (
+                <div key={renderKey} className="text-slate-800 dark:text-slate-100 leading-loose">
+                  {renderTokens(tokens, expanded, toggle, highlightUnknown)}
+                </div>
+              )}
+            </div>
+
+            {/* Stats */}
+            {tokens.length > 0 && (
+              <div className="mt-5 pt-4 border-t border-white/60 dark:border-white/10 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600 dark:text-slate-400">
+                <Stat dot="bg-indigo-500" label={`${stats.total} tokens`} />
+                <Stat dot="bg-emerald-500" label={`${stats.known} known`} />
+                <Stat dot="bg-amber-500"   label={`${stats.unknown} unknown`} />
+                <span className="ml-auto">
+                  Mode:&nbsp;
+                  <span className="font-medium text-slate-700 dark:text-slate-200">
+                    { (gen.language === 'auto' ? detectLanguage(gen.text) : gen.language) === 'chinese'
+                      ? 'Chinese 中文' : 'European' }
+                  </span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Tip card */}
+          <div className="mt-5 glass rounded-2xl p-5 text-sm text-slate-600 dark:text-slate-300">
+            <div className="flex items-start gap-3">
+              <div className="h-8 w-8 shrink-0 grid place-items-center rounded-lg bg-gradient-to-br from-indigo-500/20 to-pink-500/20 text-indigo-600 dark:text-indigo-300">
+                <I.Sparkles size={16}/>
+              </div>
+              <div>
+                <p className="font-medium text-slate-800 dark:text-slate-100 mb-1">How it works</p>
+                <p>
+                  Paste your text and a vocabulary list. We tokenize using a <strong>longest-match-first</strong> algorithm
+                  for Chinese (so <span className="font-zh">不是</span> stays together, not <span className="font-zh">不 + 是</span>),
+                  and a word-aware splitter for European languages. <strong>Tap any word</strong> to reveal its meaning
+                  and pinyin inline; tap again to hide.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+        Built with React · Tailwind · ❤️ for language learners
+      </footer>
+    </div>
+  );
+}
+
+// Helpers used inside App
+function renderTokens(tokens, expanded, toggle, showUnknown) {
+  // Group lines for nicer wrapping
+  const lines = [];
+  let line = [];
+  tokens.forEach((t, i) => {
+    if (t.kind === 'newline') { lines.push(line); line = []; }
+    else line.push({ t, i });
+  });
+  lines.push(line);
+
+  return lines.map((lineArr, lineIdx) => (
+    <div key={lineIdx} className="my-1.5 flex flex-wrap items-end">
+      {lineArr.map(({t, i}, k) => {
+        if (t.kind === 'word') {
+          return (
+            <Token
+              key={i}
+              token={t}
+              index={i}
+              expanded={expanded.has(i)}
+              onToggle={toggle}
+              showUnknown={showUnknown}
+              animDelay={k * 22 + lineIdx * 60}
+            />
+          );
+        }
+        if (t.kind === 'space') {
+          return <span key={i} className="whitespace-pre">{t.text}</span>;
+        }
+        if (t.kind === 'punct') {
+          return (
+            <span
+              key={i}
+              className={
+                (/[\u3000-\u303F\uFF00-\uFFEF]/.test(t.text) ? "font-zh text-2xl " : "text-lg ") +
+                "text-slate-400 dark:text-slate-500 px-0.5"
+              }
+            >
+              {t.text}
+            </span>
+          );
+        }
+        return null;
+      })}
+      {lineArr.length === 0 && <span>&nbsp;</span>}
+    </div>
+  ));
+}
+
+function Stat({ dot, label }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`h-2 w-2 rounded-full ${dot}`}/>
+      {label}
+    </span>
+  );
+}
+
+function EmptyState({ onChinese, onFrench }) {
+  return (
+    <div className="h-full min-h-[280px] grid place-items-center text-center">
+      <div className="max-w-sm">
+        <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 via-purple-500/20 to-pink-500/20 grid place-items-center text-3xl logo-float">
+          📖
+        </div>
+        <h3 className="mt-4 font-semibold text-slate-800 dark:text-slate-100">Nothing here yet</h3>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Paste some text and a vocabulary list on the left, then hit
+          <span className="mx-1 font-medium text-indigo-600 dark:text-indigo-300">Generate Learning Mode</span>.
+        </p>
+        <div className="mt-4 flex justify-center gap-2">
+          <button onClick={onChinese} className="text-xs px-3 py-1.5 rounded-lg bg-white/70 dark:bg-white/5 border border-white/70 dark:border-white/10 hover:bg-white dark:hover:bg-white/10">Try Chinese</button>
+          <button onClick={onFrench}  className="text-xs px-3 py-1.5 rounded-lg bg-white/70 dark:bg-white/5 border border-white/70 dark:border-white/10 hover:bg-white dark:hover:bg-white/10">Try French</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
